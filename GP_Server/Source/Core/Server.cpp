@@ -94,14 +94,16 @@ void Server::Run()
 
 	static std::vector<std::thread> threads;
 	int32 coreNum = std::thread::hardware_concurrency();
-	int32 numThreads = coreNum;
-	for (int32 i = 0; i < numThreads; ++i) {
-		threads.emplace_back([this]() {WorkerThreadLoop(); });
+
+	for (int32 i = 0; i < coreNum; ++i) {
+		threads.emplace_back([this]() { WorkerThreadLoop(); });
 	}
 	threads.emplace_back(TimerQueue::TimerThread);
+
 	const int32 jobThreads = std::max(2, coreNum / 4);
 	for (int32 i = 0; i < jobThreads; ++i)
 		threads.emplace_back([]() { SessionManager::GetInst().GameJobWorkerLoop(); });
+
 	for (auto& thread : threads)
 	{
 		thread.join();
