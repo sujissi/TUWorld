@@ -22,7 +22,7 @@ struct TimerEvent
 class TimerQueue
 {
 public:
-	static void TimerThread();
+	static void TimerWorkerLoop();
 	static void AddTimer(std::function<void()> callback, uint32_t intervalMs, bool repeat = false);
 	
 	static std::priority_queue<TimerEvent> _timerQueue;

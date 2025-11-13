@@ -4,7 +4,7 @@
 std::priority_queue<TimerEvent> TimerQueue::_timerQueue;
 std::mutex TimerQueue::_mutex;
 
-void TimerQueue::TimerThread()
+void TimerQueue::TimerWorkerLoop()
 {
 	std::unique_lock<std::mutex> lock(_mutex);
 	while (true)

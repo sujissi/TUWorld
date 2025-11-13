@@ -31,7 +31,7 @@ void DummyClientManager::Run()
 
 		threads.emplace_back([this]() { WorkerThread(); });
 		threads.emplace_back([this]() { TestThread(); });
-		threads.emplace_back(TimerQueue::TimerThread);
+		threads.emplace_back(TimerQueue::TimerWorkerLoop);
 		for (auto& thread : threads)
 		{
 			thread.join();

@@ -13,7 +13,7 @@ public:
 	bool Init();
 	void Connect(SOCKET& socket);
 	void Disconnect(int32 sessionId);
-	void GameJobWorkerLoop();
+	void GameLogicWorkerLoop();
 	void Schedule(int32 sessionId, std::function<void()> job);
 
 	void DoRecv(int32 sessionId);

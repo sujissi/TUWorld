@@ -63,7 +63,7 @@ void SessionManager::Schedule(int32 sessionId, std::function<void()> job)
 	GameJobScheduler::GetInst().Schedule(sessionId);
 }
 
-void SessionManager::GameJobWorkerLoop()
+void SessionManager::GameLogicWorkerLoop()
 {
 	while (true) {
 		int32 sessionId = GameJobScheduler::GetInst().Pop();

@@ -17,7 +17,7 @@ public:
 protected:
 	void InitSocket(SOCKET& socket, DWORD dwFlags);
 
-	void WorkerThreadLoop();
+	void NetworkWorkerLoop();
 	void HandleCompletionError(ExpOver* ex_over, int32 _id);
 	void DoAccept();
 

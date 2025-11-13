@@ -94,15 +94,13 @@ void Server::Run()
 
 	static std::vector<std::thread> threads;
 	int32 coreNum = std::thread::hardware_concurrency();
-
-	for (int32 i = 0; i < coreNum; ++i) {
-		threads.emplace_back([this]() { WorkerThreadLoop(); });
+	for (int32 i = 0; i < coreNum; ++i)
+	{
+		threads.emplace_back(&Server::NetworkWorkerLoop, this);
+		threads.emplace_back(&SessionManager::GameLogicWorkerLoop, &SessionManager::GetInst());
 	}
-	threads.emplace_back(TimerQueue::TimerThread);
 
-	const int32 jobThreads = std::max(2, coreNum / 4);
-	for (int32 i = 0; i < jobThreads; ++i)
-		threads.emplace_back([]() { SessionManager::GetInst().GameJobWorkerLoop(); });
+	threads.emplace_back(&TimerQueue::TimerWorkerLoop);
 
 	for (auto& thread : threads)
 	{
@@ -128,7 +126,7 @@ void Server::InitSocket(SOCKET& socket, DWORD dwFlags)
 	socket = WSASocketW(AF_INET, SOCK_STREAM, 0, NULL, 0, dwFlags);
 }
 
-void Server::WorkerThreadLoop()
+void Server::NetworkWorkerLoop()
 {
 	DWORD recvByte;
 	ULONG_PTR sessionId;
