@@ -31,6 +31,7 @@
 #include "RandomUtils.h"
 #include "TimerQueue.h"
 #include "DBManager.h"
+#include "ConfigManager.h"
 
 #include "Map.h"
 #include "ItemTable.h"

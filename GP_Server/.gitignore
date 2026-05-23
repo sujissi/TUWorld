@@ -36,6 +36,9 @@ _deps/
 *.dll
 *.exe
 
+# Config (contains credentials)
+config.json
+
 # Log files
 *.log
 gp_server_log.txt

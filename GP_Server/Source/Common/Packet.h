@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include "Common.h"
 
 #pragma pack(push,1)
@@ -272,7 +272,7 @@ struct PlayerDamagePacket : public Packet
 	FInfoData Target;
 
 	PlayerDamagePacket(const FInfoData& Target_)
-		: Packet(EPacketType::S_DAMAGED_MONSTER), Target(Target_)
+		: Packet(EPacketType::S_DAMAGED_PLAYER), Target(Target_)
 	{
 		Header.PacketSize = sizeof(PlayerDamagePacket);
 	}
@@ -675,7 +675,6 @@ struct QuestRewardPacket : public Packet
 
 #pragma endregion
 
-#pragma pack(pop)
 #pragma region Chat
 
 struct ChatSendPacket : public Packet
@@ -747,10 +746,10 @@ namespace Tino
 
 	struct FlameBreathPacket : public Packet
 	{
-		FVector Origin;     // ½ÃÀÛ À§Ä¡ (¸ó½ºÅÍ À§Ä¡)
-		FVector Direction;  // Àü¹æ ¹æÇâ ´ÜÀ§ º¤ÅÍ
-		float Range;        // ±æÀÌ (ex. 600.f)
-		float AngleDeg;     // °¢µµ (ex. 30.f)
+		FVector Origin;
+		FVector Direction;
+		float Range;
+		float AngleDeg;
 		bool bDebug = false;
 
 		FlameBreathPacket(const FVector& origin, const FVector& direction, float range, float angle, bool debug = false)
@@ -889,5 +888,7 @@ struct FriendRequestPacket : public Packet
 	}
 };
 
-// Todo: ½Ã°£ ³²À¸¸é Ä£±¸ ·Î±×¾Æ¿ô/·Î±×ÀÎ 
+// Todo: ì‹œê°„ ë˜ë©´ ì¹œêµ¬ ë¡œê·¸ì•„ì›ƒ/ë¡œê·¸ì¸
 #pragma endregion
+
+#pragma pack(pop)

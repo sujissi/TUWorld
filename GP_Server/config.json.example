@@ -1,0 +1,16 @@
+{
+    "server": {
+        "ip": "0.0.0.0",
+        "port": 4000
+    },
+    "database": {
+        "host": "localhost",
+        "user": "",
+        "password": "",
+        "schema": ""
+    },
+    "paths": {
+        "dataTable": "./Data/DataTable/",
+        "mapData": "./Data/MapJsonData/"
+    }
+}

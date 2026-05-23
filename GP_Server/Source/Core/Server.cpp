@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "Server.h"
 #include "IOCP.h"
 #include "SessionManager.h"
@@ -7,8 +7,16 @@
 bool Server::Init()
 {
 	SetConsoleOutputCP(CP_UTF8);
+
+	if (!ConfigManager::GetInst().Load())
+	{
+		LOG_E("ConfigManager");
+		return false;
+	}
+
 #ifdef DB_MODE
-	if (!DBManager::GetInst().Connect("localhost", "serverdev", "pass123!", "gp2025"))
+	auto& cfg = ConfigManager::GetInst();
+	if (!DBManager::GetInst().Connect(cfg.GetDBHost(), cfg.GetDBUser(), cfg.GetDBPassword(), cfg.GetDBSchema()))
 	{
 		LOG_E("DBManager");
 		return false;
@@ -30,7 +38,7 @@ bool Server::Init()
 
 	SOCKADDR_IN addr_s;
 	addr_s.sin_family = AF_INET;
-	addr_s.sin_port = htons(SERVER_PORT);
+	addr_s.sin_port = htons(static_cast<u_short>(ConfigManager::GetInst().GetServerPort()));
 	addr_s.sin_addr.s_addr = htonl(ADDR_ANY);
 
 	if (bind(_listenSocket, reinterpret_cast<sockaddr*>(&addr_s), sizeof(addr_s)) == SOCKET_ERROR)
@@ -57,13 +65,14 @@ bool Server::Init()
 		return false;
 	}
 
+	const std::string& dtPath = ConfigManager::GetInst().GetDataTablePath();
 	bool res =
-		ItemTable::GetInst().LoadFromCSV(DataTablePath + "ItemTable.csv") &&
-		PlayerLevelTable::GetInst().LoadFromCSV(DataTablePath + "PlayerLevelTable.csv") &&
-		PlayerSkillTable::GetInst().LoadFromCSV(DataTablePath + "PlayerSkillTable.csv") &&
-		MonsterTable::GetInst().LoadFromCSV(DataTablePath + "MonsterTable.csv") &&
-		SpawnTable::GetInst().LoadFromCSV(DataTablePath + "SpawnTable.csv") &&
-		QuestTable::GetInst().LoadFromCSV(DataTablePath + "QuestTable.csv");
+		ItemTable::GetInst().LoadFromCSV(dtPath + "ItemTable.csv") &&
+		PlayerLevelTable::GetInst().LoadFromCSV(dtPath + "PlayerLevelTable.csv") &&
+		PlayerSkillTable::GetInst().LoadFromCSV(dtPath + "PlayerSkillTable.csv") &&
+		MonsterTable::GetInst().LoadFromCSV(dtPath + "MonsterTable.csv") &&
+		SpawnTable::GetInst().LoadFromCSV(dtPath + "SpawnTable.csv") &&
+		QuestTable::GetInst().LoadFromCSV(dtPath + "QuestTable.csv");
 
 	if (!res)
 	{

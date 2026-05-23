@@ -1,42 +1,14 @@
-cmake_minimum_required(VERSION 3.20)
+﻿cmake_minimum_required(VERSION 3.20)
 project(GP_Server LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SOURCES
-    Source/ServerMain.cpp
-    Source/Core/IOCP/ExpOver.cpp
-    Source/Core/IOCP/IOCP.cpp
-    Source/Core/PacketManager.cpp
-    Source/Core/PlayerSession.cpp
-    Source/Core/Server.cpp
-    Source/Core/SessionManager.cpp
-    Source/Core/SessionSocket.cpp
-    Source/DB/DBConnectionPool.cpp
-    Source/DB/DBManager.cpp
-    Source/Game/Character/Character.cpp
-    Source/Game/Character/Monster.cpp
-    Source/Game/Character/Player.cpp
-    Source/Game/DataTable/ItemTable.cpp
-    Source/Game/DataTable/MonsterTable.cpp
-    Source/Game/DataTable/PlayerLevelTable.cpp
-    Source/Game/DataTable/PlayerSkillTable.cpp
-    Source/Game/DataTable/QuestTable.cpp
-    Source/Game/DataTable/SpawnTable.cpp
-    Source/Game/GameJobScheduler.cpp
-    Source/Game/GameWorld.cpp
-    Source/Game/GameWorldManager.cpp
-    Source/Game/Item/Inventory.cpp
-    Source/Game/Item/Item.cpp
-    Source/Game/Item/WorldItem.cpp
-    Source/Game/JobQueue.cpp
-    Source/Game/Map/Map.cpp
-    Source/Game/Map/NavMesh.cpp
-    Source/Utils/TimerQueue.cpp
+file(GLOB_RECURSE ALL_SOURCES
+    "${CMAKE_SOURCE_DIR}/Source/*.cpp"
 )
 
-add_executable(GP_Server ${SOURCES})
+add_executable(GP_Server ${ALL_SOURCES})
 
 target_include_directories(GP_Server PRIVATE
     ${CMAKE_SOURCE_DIR}/Includes
@@ -88,4 +60,18 @@ add_custom_command(TARGET GP_Server POST_BUILD
         ${MYSQL_LIB_DIR}/libssl-3-x64.dll
         ${MYSQL_LIB_DIR}/mysqlcppconnx-2-vs14.dll
         $<TARGET_FILE_DIR:GP_Server>
+)
+
+# config.json을 빌드 출력 디렉토리로 복사
+add_custom_command(TARGET GP_Server POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_SOURCE_DIR}/config.json
+        $<TARGET_FILE_DIR:GP_Server>
+)
+
+# Data 폴더(DataTable, MapJsonData)를 빌드 출력 디렉토리로 복사
+add_custom_command(TARGET GP_Server POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/Data
+        $<TARGET_FILE_DIR:GP_Server>/Data
 )
