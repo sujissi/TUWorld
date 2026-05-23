@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\GP_Server\Source\Core\ConfigManager.cpp" />
     <ClCompile Include="..\GP_Server\Source\Core\IOCP\ExpOver.cpp" />
     <ClCompile Include="..\GP_Server\Source\Core\IOCP\IOCP.cpp" />
     <ClCompile Include="..\GP_Server\Source\Game\Map\Map.cpp" />
@@ -100,10 +101,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <ExternalIncludePath>$(SolutionDir)Includes;$(SolutionDir)Includes\mysqlx\include;$(SolutionDir)Source;$(SolutionDir)Source\Common;$(SolutionDir)Source\Core\IOCP;$(SolutionDir)Source\Core;$(SolutionDir)Source\Game;$(SolutionDir)Source\Game\Character;$(SolutionDir)Source\Game\Map;$(SolutionDir)Source\Game\Item;$(SolutionDir)Source\Game\DataTable;$(SolutionDir)Source\DB;$(SolutionDir)Source\AI;$(SolutionDir)Source\Utils</ExternalIncludePath>
+    <ExternalIncludePath>$(ProjectDir)..\GP_Server\Includes;$(ProjectDir)..\GP_Server\Includes\mysqlx\include;$(ProjectDir)..\GP_Server\Source;$(ProjectDir)..\GP_Server\Source\Common;$(ProjectDir)..\GP_Server\Source\Core\IOCP;$(ProjectDir)..\GP_Server\Source\Core;$(ProjectDir)..\GP_Server\Source\Game;$(ProjectDir)..\GP_Server\Source\Game\Character;$(ProjectDir)..\GP_Server\Source\Game\Map;$(ProjectDir)..\GP_Server\Source\Game\Item;$(ProjectDir)..\GP_Server\Source\Game\DataTable;$(ProjectDir)..\GP_Server\Source\DB;$(ProjectDir)..\GP_Server\Source\AI;$(ProjectDir)..\GP_Server\Source\Utils</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <ExternalIncludePath>$(SolutionDir)Includes;$(SolutionDir)Includes\mysqlx\include;$(SolutionDir)Source;$(SolutionDir)Source\Common;$(SolutionDir)Source\Core\IOCP;$(SolutionDir)Source\Core;$(SolutionDir)Source\Game;$(SolutionDir)Source\Game\Character;$(SolutionDir)Source\Game\Map;$(SolutionDir)Source\Game\Item;$(SolutionDir)Source\Game\DataTable;$(SolutionDir)Source\DB;$(SolutionDir)Source\AI;$(SolutionDir)Source\Utils</ExternalIncludePath>
+    <ExternalIncludePath>$(ProjectDir)..\GP_Server\Includes;$(ProjectDir)..\GP_Server\Includes\mysqlx\include;$(ProjectDir)..\GP_Server\Source;$(ProjectDir)..\GP_Server\Source\Common;$(ProjectDir)..\GP_Server\Source\Core\IOCP;$(ProjectDir)..\GP_Server\Source\Core;$(ProjectDir)..\GP_Server\Source\Game;$(ProjectDir)..\GP_Server\Source\Game\Character;$(ProjectDir)..\GP_Server\Source\Game\Map;$(ProjectDir)..\GP_Server\Source\Game\Item;$(ProjectDir)..\GP_Server\Source\Game\DataTable;$(ProjectDir)..\GP_Server\Source\DB;$(ProjectDir)..\GP_Server\Source\AI;$(ProjectDir)..\GP_Server\Source\Utils</ExternalIncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -143,6 +144,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)Source;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -161,6 +163,7 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir)Source;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

@@ -3,7 +3,7 @@
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
 
-bool Map::Init()
+bool Map::Init(const std::string& mapDataPath)
 {
 	const std::vector<std::pair<ZoneType, std::string>> ZoneMeshFiles = {
 	{ ZoneType::TUK,        "NavMeshData_TUK.json" },
@@ -24,7 +24,9 @@ bool Map::Init()
 	{ EntryType::INDUSTY_OUT,  "NavMeshData_Industry_Out.json" }
 	};
 
-	const std::string& mapPath = ConfigManager::GetInst().GetMapDataPath();
+	const std::string mapPath = mapDataPath.empty()
+		? ConfigManager::GetInst().GetMapDataPath()
+		: mapDataPath;
 	for (const auto& [zone, file] : ZoneMeshFiles)
 	{
 		auto meshOpt = NavMesh::LoadFromJson(mapPath + file);

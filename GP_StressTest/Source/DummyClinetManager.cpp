@@ -10,14 +10,14 @@ bool DummyClientManager::Init()
 	WSADATA wsaData;
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 	{
-		LOG_E("WSAStartup");
+		std::cerr << "WSAStartup failed\n";
 		return false;
 	}
 	for (uint32 i = 0;i < CLIENT_NUM;++i)
 		_clients[i].Init(i);
-	if (!Map::GetInst().Init())
+	if (!Map::GetInst().Init(MapDataPath))
 	{
-		LOG_E("MapZone");
+		std::cerr << "Map init failed\n";
 		return false;
 	}
 	return true;
@@ -25,23 +25,18 @@ bool DummyClientManager::Init()
 
 void DummyClientManager::Run()
 {
-	std::thread worker, timer;
 	try {
-		static std::vector<std::thread> threads;
-
-		threads.emplace_back([this]() { WorkerThread(); });
-		threads.emplace_back([this]() { TestThread(); });
-		threads.emplace_back(TimerQueue::TimerWorkerLoop);
-		for (auto& thread : threads)
-		{
-			thread.join();
-		}
+		_threads.emplace_back([this]() { WorkerThread(); });
+		_threads.emplace_back([this]() { TestThread(); });
+		_threads.emplace_back([this]() { StatsThread(); });
+		_threads.emplace_back(TimerQueue::TimerWorkerLoop);
+		for (auto& t : _threads)
+			if (t.joinable()) t.join();
 	}
 	catch (const std::exception& e) {
-		LOG_E("Thread error: {}", e.what());
+		std::cerr << "Thread error: " << e.what() << '\n';
 		throw;
 	}
-
 }
 
 void DummyClientManager::Shutdown()
@@ -55,17 +50,10 @@ void DummyClientManager::Shutdown()
 void DummyClientManager::SendMovePacket(int i)
 {
 	if (_clients[i].IsConnected())
-	{
 		_clients[i].SendMovePacket();
-	}
-	else
-	{
-		LOG_E("client[{}] is not connected", i);
-	}
 }
 void DummyClientManager::WorkerThread()
 {
-	LOG_I("Run Stress Test WorkerThread");
 	DWORD rbyte;
 	ULONG_PTR id;
 	LPWSAOVERLAPPED over;
@@ -97,25 +85,26 @@ void DummyClientManager::WorkerThread()
 	}
 	catch (const std::exception& e)
 	{
-		LOG_E("Exception in WorkerThread: {}", e.what());
+		std::cerr << "Exception in WorkerThread: " << e.what() << '\n';
 	}
 	catch (...)
 	{
-		LOG_E("Unknown exception in WorkerThread!");
+		std::cerr << "Unknown exception in WorkerThread!\n";
 	}
 }
 
 void DummyClientManager::TestThread()
 {
-	while (true)
+	while (_running)
 	{
 		AdjustClientCount();
-		for (int i = 0;i < CLIENT_NUM;i++)
+		for (int i = 0; i < CLIENT_NUM; i++)
 		{
 			if (!_clients[i].IsConnected()) continue;
 			if (_clients[i].IsLogin())
 				_clients[i].SendMovePacket();
 		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
@@ -137,6 +126,7 @@ void DummyClientManager::AdjustClientCount()
 
 	int t_delay = delayTime;
 	if (DELAY_LIMIT2 < t_delay) {
+		// RTT 심각 (>300ms): 클라이언트 감소
 		if (true == increasing) {
 			max_limit = _active_clients;
 			increasing = false;
@@ -148,15 +138,55 @@ void DummyClientManager::AdjustClientCount()
 		_client_to_close++;
 		return;
 	}
-	else
-		if (DELAY_LIMIT < t_delay) {
-			delay_multiplier = 10;
-			return;
-		}
+	else if (DELAY_LIMIT < t_delay) {
+		// RTT 경고 (100~300ms): 접속 속도 낮춤
+		delay_multiplier = 10;
+		return;
+	}
+
+	// RTT 양호 (<100ms): 접속 속도 정상화 후 클라이언트 추가
+	delay_multiplier = 1;
 	if (max_limit - (max_limit / 20) < _active_clients) return;
 	increasing = true;
 	last_connect_time = high_resolution_clock::now();
 	Connect(_num_connections);
+}
+
+void DummyClientManager::StatsThread()
+{
+	auto startTime = steady_clock::now();
+
+	std::cout << std::format("{:>5}  {:>6}  {:>6}  {:>8}  {:>9}  {:>7}  {:>7}  {:>7}\n",
+		"sec", "conn", "active", "move/s", "avg(ms)", "min(ms)", "max(ms)", "delay");
+	std::cout << std::string(68, '-') << '\n';
+
+	while (_running)
+	{
+		std::this_thread::sleep_for(std::chrono::seconds(1));
+
+		auto elapsedSec = duration_cast<seconds>(steady_clock::now() - startTime).count();
+
+		long long sent    = g_stats.moveSent.exchange(0);
+		long long rttSum  = g_stats.rttSum.exchange(0);
+		int       rttCnt  = g_stats.rttCount.exchange(0);
+		long long rttMin  = g_stats.rttMin.exchange(-1);
+		long long rttMax  = g_stats.rttMax.exchange(-1);
+
+		double avgRtt = (rttCnt > 0) ? static_cast<double>(rttSum) / rttCnt : 0.0;
+		std::string minStr = (rttMin >= 0) ? std::format("{}ms", rttMin) : "-";
+		std::string maxStr = (rttMax >= 0) ? std::format("{}ms", rttMax) : "-";
+
+		std::cout << std::format("{:>4d}s  {:>6d}  {:>6d}  {:>8d}  {:>7.1f}ms  {:>6}  {:>6}  {:>5d}ms\n",
+			elapsedSec,
+			_num_connections.load(),
+			_active_clients.load(),
+			sent,
+			avgRtt,
+			minStr,
+			maxStr,
+			delayTime
+		);
+	}
 }
 
 void DummyClientManager::HandleCompletionError(ExpOver* ex_over, int32 id)
@@ -188,8 +218,6 @@ void DummyClientManager::HandleCompletionError(ExpOver* ex_over, int32 id)
 	case CompType::RECV: cmptype = "RECV"; break;
 	case CompType::SEND: cmptype = "SEND"; break;
 	}
-
-	LOG_W("CompType : {}[{}] Code={} Msg={}", cmptype, id, ex_over->errorCode, errMsg);
 
 	Disconnect(id);
 

@@ -79,7 +79,6 @@ GP_Server/x64/Release/*.pdb
 GP_Server/x64/Release/DataTable/*
 GP_Server/x64/Release/MapJsonData/*
 GP_Server/GP_Server/x64/
-GP_StressTest/x64
 
 *.vcxproj.user
 GP_Server/gp_server_log.txt

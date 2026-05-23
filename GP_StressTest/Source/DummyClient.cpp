@@ -11,17 +11,11 @@ bool DummyClient::Init(uint32 num)
 bool DummyClient::Connect(IOCP& hIocp)
 {
 	if (_connected)
-	{
-		LOG_W("Already connected - ID{}", _playerId);
 		return false;
-	}
 
 	_socket = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 	if (_socket == INVALID_SOCKET)
-	{
-		LOG_W("WSASocket failed. Code={}", WSAGetLastError());
 		return false;
-	}
 
 	sockaddr_in addr;
 	addr.sin_family = AF_INET;
@@ -31,8 +25,6 @@ bool DummyClient::Connect(IOCP& hIocp)
 	
 	if (connect(_socket, (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR)
 	{
-		int errCode = WSAGetLastError();
-		LOG_W("Connect failed. Code={}", errCode);
 		closesocket(_socket);
 		_socket = INVALID_SOCKET;
 		return false;
@@ -41,7 +33,6 @@ bool DummyClient::Connect(IOCP& hIocp)
 	hIocp.RegisterSocket(_socket, _dummyNum);
 	DoRecv();
 	SendSignUpPacket();
-	LOG_I("Connect [{}] ", _name, _socket);
 	_connected = true;
 
 	return true;
@@ -61,28 +52,18 @@ bool DummyClient::Disconnect()
 void DummyClient::DoRecv()
 {
 	if (_socket == INVALID_SOCKET)
-	{
-		LOG_W("DoRecv called with invalid socket");
 		return;
-	}
 	ZeroMemory(&_recvOver._wsaover, sizeof(_recvOver._wsaover));
 	DWORD recv_flag = 0;
 	_recvOver._wsabuf.len = BUFSIZE - _remain;
 	_recvOver._wsabuf.buf = reinterpret_cast<CHAR*>(_recvOver._buf) + _remain;
-	int res = WSARecv(_socket, &_recvOver._wsabuf, 1, 0, &recv_flag, &_recvOver._wsaover, 0);
-	if (res == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
-	{
-		LOG_E("WSARecv failed. Error: {}", WSAGetLastError());
-	}
+	WSARecv(_socket, &_recvOver._wsabuf, 1, 0, &recv_flag, &_recvOver._wsaover, 0);
 }
 
 void DummyClient::DoSend(Packet* packet)
 {
 	if (_socket == INVALID_SOCKET)
-	{
-		LOG_W("DoSend called with invalid socket");
 		return;
-	}
 	auto send_data = new ExpOver{ packet };
 	WSASend(_socket, &send_data->_wsabuf, 1, nullptr, 0, &send_data->_wsaover, nullptr);
 }
@@ -146,7 +127,8 @@ void DummyClient::ProcessPacket(Packet* packet)
 	{
 		auto pkt = reinterpret_cast<MovePacket*>(packet);
 		auto rtt_ms = NowMs() - pkt->MoveTime;
-		UpdateDelay(rtt_ms);
+		UpdateDelay(static_cast<int>(rtt_ms));
+		g_stats.RecordRtt(rtt_ms);
 		break;
 	}
 	default:
@@ -191,6 +173,7 @@ bool DummyClient::SendMovePacket()
 	auto sendPos = _info.Pos;
 	MovePacket pkt(_playerId, sendPos, _info.State, now);
 	DoSend(&pkt);
+	++g_stats.moveSent;
 	last_move_time = high_resolution_clock::now();
 	return true;
 }

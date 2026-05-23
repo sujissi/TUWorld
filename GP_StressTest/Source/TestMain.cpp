@@ -3,7 +3,11 @@
 
 int main()
 {
-	LogManager::Init();
+	SetConsoleCtrlHandler([](DWORD) -> BOOL {
+		DummyClientManager::GetInst().Shutdown();
+		return TRUE;
+	}, TRUE);
+
 	auto& TestMgr = DummyClientManager::GetInst();
 	if (!TestMgr.Init())
 		return -1;
@@ -15,6 +19,5 @@ int main()
 	{
 		TestMgr.Shutdown();
 	}
-	LogManager::Shutdown();
 	return 0;
 }

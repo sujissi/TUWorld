@@ -10,7 +10,7 @@ public:
 		return inst;
 	}
 
-	bool Init();
+	bool Init(const std::string& mapDataPath = "");
 	bool IsZoneAccessible(ZoneType zone, uint32 playerLevel) const;
 
 	FVector GetRandomPos(ZoneType type) const;

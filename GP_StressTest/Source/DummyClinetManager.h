@@ -17,6 +17,7 @@ public:
 
 	void WorkerThread();
 	void TestThread();
+	void StatsThread();
 	void HandleRecv(int32 id, DWORD rbyte, LPWSAOVERLAPPED over);
 	void AdjustClientCount();
 	void HandleCompletionError(ExpOver* ex_over, int32 id);
@@ -27,8 +28,7 @@ public:
 	}
 	void Disconnect(int32 id)
 	{
-		LOG_I("Disconnect [{}]", id);
-		if(_clients[id].Disconnect())
+		if (_clients[id].Disconnect())
 			_active_clients--;
 	}
 private:

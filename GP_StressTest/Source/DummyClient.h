@@ -36,7 +36,6 @@ private:
 	uint32 _dummyNum = 0;
 	std::string _name;
 	int32& _playerId = _info.ID;
-	std::thread _moveThread;
 	high_resolution_clock::time_point last_move_time;
 };
 
