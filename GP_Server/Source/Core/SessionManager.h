@@ -34,6 +34,7 @@ public:
 
 private:
 	int32 GenerateId();
+	PlayerSession* GetSessionNoLock(int32 sessionId);
 private:
 	std::array<std::unique_ptr<PlayerSession>, MAX_CLIENT> _sessions;
 	IOCP& _iocp = IOCP::GetInst();

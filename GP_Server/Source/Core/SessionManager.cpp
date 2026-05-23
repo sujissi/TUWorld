@@ -11,37 +11,44 @@ bool SessionManager::Init()
 
 void SessionManager::Connect(SOCKET& socket)
 {
-	std::lock_guard<std::mutex> lock(_sMutex);
-	int32 _id = GenerateId();
-	if (_id != -1) {
-		_sessions[_id] = std::make_unique<PlayerSession>();
-		_sessions[_id]->Connect(socket, _id);
-		_iocp.RegisterSocket(socket, _id);
-		_sessions[_id]->DoRecv();
+	int32 id;
+	{
+		std::lock_guard<std::mutex> idLock(_idMutex);
+		id = GenerateId();
 	}
+	if (id == -1) return;
+
+	std::lock_guard<std::mutex> lock(_sMutex);
+	_sessions[id] = std::make_unique<PlayerSession>();
+	_sessions[id]->Connect(socket, id);
+	_iocp.RegisterSocket(socket, id);
+	_sessions[id]->DoRecv();
 }
 
 void SessionManager::Disconnect(int32 sessionId)
 {
+	std::string name;
+	uint32 dbId = 0;
+
 	{
 		std::lock_guard<std::mutex> lock(_sMutex);
-
 		if (sessionId < 0 || sessionId >= MAX_CLIENT || !_sessions[sessionId])
 		{
 			LOG_W("Invalid session id: {}", sessionId);
 			return;
 		}
 		auto session = _sessions[sessionId].get();
-		auto name = session->GetNickName();
-		auto dbId = session->GetDBID();
-		{
-			std::lock_guard<std::mutex> lock(_mapMutex);
-			_dbidToSessionIdMap.erase(dbId);
-			_dbidToNameMap.erase(dbId);
-			_nameToDbidMap.erase(name);
-		}
+		name  = session->GetNickName();
+		dbId  = session->GetDBID();
 		_sessions[sessionId]->Disconnect();
 		_sessions[sessionId].reset();
+	}
+
+	{
+		std::lock_guard<std::mutex> mapLock(_mapMutex);
+		_dbidToSessionIdMap.erase(dbId);
+		_dbidToNameMap.erase(dbId);
+		_nameToDbidMap.erase(name);
 	}
 
 	{
@@ -181,6 +188,11 @@ void SessionManager::BroadcastToViewList(Packet* packet, const std::unordered_se
 PlayerSession* SessionManager::GetSession(int32 sessionId)
 {
 	std::lock_guard<std::mutex> lock(_sMutex);
+	return GetSessionNoLock(sessionId);
+}
+
+PlayerSession* SessionManager::GetSessionNoLock(int32 sessionId)
+{
 	if (sessionId < 0 || sessionId >= MAX_CLIENT || !_sessions[sessionId])
 		return nullptr;
 	return _sessions[sessionId].get();
@@ -188,10 +200,8 @@ PlayerSession* SessionManager::GetSession(int32 sessionId)
 
 int SessionManager::GenerateId()
 {
-	std::lock_guard<std::mutex> lock(_idMutex);
 	if (_freeIds.empty())
 		return -1;
-
 	int id = _freeIds.front();
 	_freeIds.pop();
 	return id;
@@ -199,12 +209,13 @@ int SessionManager::GenerateId()
 
 int32 SessionManager::GetOnlineSessionIdByDBId(uint32 dbid)
 {
-	std::lock_guard<std::mutex> lock(_mapMutex);
-	auto it = _dbidToSessionIdMap.find(dbid);
-
 	int32 sessId = -1;
-	if (it != _dbidToSessionIdMap.end())
-		sessId = it->second;
+	{
+		std::lock_guard<std::mutex> mapLock(_mapMutex);
+		auto it = _dbidToSessionIdMap.find(dbid);
+		if (it != _dbidToSessionIdMap.end())
+			sessId = it->second;
+	}
 	auto sess = GetSession(sessId);
 	if (sess && sess->IsLogin())
 		return sessId;

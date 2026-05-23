@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "SessionSocket.h"
 #include "PacketManager.h"
 
@@ -39,7 +39,11 @@ void SessionSocket::DoSend(const Packet* packet)
 		return;
 
 	auto over = new ExpOver{ packet };
-	WSASend(_socket, &over->_wsabuf, 1, nullptr, 0, &over->_wsaover, nullptr);
+	int ret = WSASend(_socket, &over->_wsabuf, 1, nullptr, 0, &over->_wsaover, nullptr);
+	if (ret == SOCKET_ERROR && WSAGetLastError() != WSA_IO_PENDING)
+	{
+		delete over;
+	}
 }
 
 void SessionSocket::OnRecv(int32 id, int32 recvByte, ExpOver* expOver)

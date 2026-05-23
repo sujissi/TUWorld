@@ -21,8 +21,8 @@ DBLoginResult DBManager::SignUpUser(int32 sessionId, const std::string& login_id
 	newinfo.ID = sessionId;
 	newinfo.SetName(nickname);
 	newinfo.CharacterType = static_cast<uint8>(Type::EPlayer::WARRIOR);
-	newinfo.fovAngle = DfAtkRadius;
-	newinfo.AttackRadius = DFfovAngle;
+	newinfo.AttackRadius = DfAtkRadius;
+	newinfo.fovAngle = DFfovAngle;
 
 	uint32 level = newinfo.Stats.Level = 1;
 	newinfo.Stats.Speed = 200.f;

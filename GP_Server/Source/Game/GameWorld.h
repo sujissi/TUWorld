@@ -112,7 +112,8 @@ private:
 	std::unordered_map<QuestType, int32> _questMons;
 	std::unordered_map<ZoneType, std::unordered_map<int32, std::shared_ptr<Player>>> _playersByZone;
 	std::unordered_map<ZoneType, std::unordered_map<int32, std::shared_ptr<Monster>>> _monstersByZone;
-	std::unordered_map<ZoneType, std::vector<std::shared_ptr<WorldItem>>> _worldItemsByZone;
+	std::unordered_map<int32, std::shared_ptr<Monster>> _allMonsters;
+	std::unordered_map<ZoneType, std::unordered_map<uint32, std::shared_ptr<WorldItem>>> _worldItemsByZone;
 
 	std::mutex _mtPlayers;
 	std::mutex _mtPlayerZMap;
