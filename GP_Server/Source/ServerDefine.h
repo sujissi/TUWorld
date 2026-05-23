@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #ifndef _DEBUG
 #define DB_MODE
 #endif
@@ -30,11 +30,6 @@ constexpr float DFGunnerfovAngle = 10;
 
 constexpr int ITEM_DISAPPEAR_TIME_MS = 60 * 1000;
 constexpr int MONSTER_RESPAWN_TIME_MS = 10 * 1000;
-
-const std::string BasePath = std::filesystem::current_path().string();
-
-const std::string MapDataPath = BasePath + "/MapJsonData/";
-const std::string DataTablePath = BasePath + "/DataTable/";
 
 #define ENUM_NAME(x) (magic_enum::enum_name(x).empty() ? "UnknownEnum" : std::string(magic_enum::enum_name(x)))
 

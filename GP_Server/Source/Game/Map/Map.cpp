@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "Map.h"
 #include <rapidjson/document.h>
 #include <rapidjson/error/en.h>
@@ -24,9 +24,10 @@ bool Map::Init()
 	{ EntryType::INDUSTY_OUT,  "NavMeshData_Industry_Out.json" }
 	};
 
+	const std::string& mapPath = ConfigManager::GetInst().GetMapDataPath();
 	for (const auto& [zone, file] : ZoneMeshFiles)
 	{
-		auto meshOpt = NavMesh::LoadFromJson(MapDataPath + file);
+		auto meshOpt = NavMesh::LoadFromJson(mapPath + file);
 		if (!meshOpt)
 		{
 			LOG_E("Failed to load zone mesh [{}]", static_cast<int>(zone));
@@ -37,7 +38,7 @@ bool Map::Init()
 
 	for (const auto& [entry, file] : EntryMeshFiles)
 	{
-		auto meshOpt = NavMesh::LoadFromJson(MapDataPath + file);
+		auto meshOpt = NavMesh::LoadFromJson(mapPath + file);
 		if (!meshOpt)
 		{
 			LOG_E("Failed to load entry mesh [{}]", static_cast<int>(entry));
