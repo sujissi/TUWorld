@@ -4,9 +4,9 @@
 #include "ScopedDBSession.h"
 #include "SessionManager.h"
 
-bool DBManager::Connect(const std::string& host, const std::string& user, const std::string& pwd, const std::string& db)
+bool DBManager::Connect(const std::string& host, const std::string& user, const std::string& pwd, const std::string& db, int32 poolSize)
 {
-	return DBConnectionPool::GetInst().Init(host, user, pwd, db, 10);
+	return DBConnectionPool::GetInst().Init(host, user, pwd, db, poolSize);
 }
 
 void DBManager::Shutdown()

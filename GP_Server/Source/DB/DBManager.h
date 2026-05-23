@@ -17,7 +17,7 @@ public:
 		static DBManager inst;
 		return inst;
 	}
-	bool Connect(const std::string& host, const std::string& user, const std::string& pass, const std::string& schema);
+	bool Connect(const std::string& host, const std::string& user, const std::string& pass, const std::string& schema, int32 poolSize);
 	void Shutdown();
 	DBLoginResult SignUpUser(int32 sessionId, const std::string& login_id, const std::string& password, const std::wstring& nickname);
 	DBLoginResult CheckLogin(int32 sessionId, const std::string& login_id, const std::string& password);

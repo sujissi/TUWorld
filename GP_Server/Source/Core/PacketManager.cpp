@@ -126,25 +126,26 @@ void PacketManager::HandleSignUpPacket(int32 sessionId, Packet* packet)
 	auto pkt = static_cast<SignUpPacket*>(packet);
 #ifdef DB_MODE
 	std::wstring name = ConvertToWString(pkt->NickName);
-	auto id = pkt->AccountID;
-	auto pw = pkt->AccountPW;
-	auto res = DBManager::GetInst().SignUpUser(sessionId, id, pw, name);
+	std::string id = pkt->AccountID;
+	std::string pw = pkt->AccountPW;
 
-	SessionManager::GetInst().Schedule(sessionId, [sessionId, res]() {
-		if (res.code != ResultCode::SUCCESS)
-		{
-			LOG_D("SignUp Failed [{}]", sessionId);
-			SignUpFailPacket failpkt(res.code);
-			SessionManager::GetInst().SendPacket(sessionId, &failpkt);
-			return;
-		}
-
-		SessionManager::GetInst().HandleLogin(sessionId, res);
-		auto states = GameWorldManager::GetInst().GetAllWorldStates();
-		SignUpSuccessPacket spkt(states.data());
-		SessionManager::GetInst().SendPacket(sessionId, &spkt);
-		LOG_D("SignUp Success [{}] userId: {}", sessionId, res.dbId);
+	DBWorker::GetInst().Push([sessionId, id, pw, name]() {
+		auto res = DBManager::GetInst().SignUpUser(sessionId, id, pw, name);
+		SessionManager::GetInst().Schedule(sessionId, [sessionId, res]() {
+			if (res.code != ResultCode::SUCCESS)
+			{
+				LOG_D("SignUp Failed [{}]", sessionId);
+				SignUpFailPacket failpkt(res.code);
+				SessionManager::GetInst().SendPacket(sessionId, &failpkt);
+				return;
+			}
+			SessionManager::GetInst().HandleLogin(sessionId, res);
+			auto states = GameWorldManager::GetInst().GetAllWorldStates();
+			SignUpSuccessPacket spkt(states.data());
+			SessionManager::GetInst().SendPacket(sessionId, &spkt);
+			LOG_D("SignUp Success [{}] userId: {}", sessionId, res.dbId);
 		});
+	});
 	return;
 #else
 	LOG_D("ID: {}, PW: {}", pkt->AccountID, pkt->AccountPW);
@@ -159,34 +160,34 @@ void PacketManager::HandleLoginPacket(int32 sessionId, Packet* packet)
 {
 	auto pkt = static_cast<LoginPacket*>(packet);
 #ifdef DB_MODE
-	auto accountID = pkt->AccountID;
-	auto accountPW = pkt->AccountPW;
-	auto res = DBManager::GetInst().CheckLogin(sessionId, accountID, accountPW);
-	auto loginsess = _sessionMgr.GetOnlineSessionIdByDBId(res.dbId);
-	if (loginsess != -1 && loginsess != sessionId)
-	{
-		LOG_W("User already logged in [{}] - Disconnecting old session: {}", res.dbId, loginsess);
-		res.code = ResultCode::ALREADY_LOGGED_IN;
-		LoginFailPacket failpkt(res.code);
-		SessionManager::GetInst().SendPacket(sessionId, &failpkt);
-		return;
-	}
+	std::string accountID = pkt->AccountID;
+	std::string accountPW = pkt->AccountPW;
 
-	SessionManager::GetInst().Schedule(sessionId, [sessionId, res]() {
-		if (res.code != ResultCode::SUCCESS)
+	DBWorker::GetInst().Push([sessionId, accountID, accountPW]() {
+		auto res = DBManager::GetInst().CheckLogin(sessionId, accountID, accountPW);
+		auto loginsess = SessionManager::GetInst().GetOnlineSessionIdByDBId(res.dbId);
+		if (loginsess != -1 && loginsess != sessionId)
 		{
-			LoginFailPacket failpkt(res.code);
+			LOG_W("User already logged in [{}] - Disconnecting old session: {}", res.dbId, loginsess);
+			LoginFailPacket failpkt(ResultCode::ALREADY_LOGGED_IN);
 			SessionManager::GetInst().SendPacket(sessionId, &failpkt);
 			return;
 		}
 
-		SessionManager::GetInst().HandleLogin(sessionId, res);
-		auto states = GameWorldManager::GetInst().GetAllWorldStates();
-		LoginSuccessPacket loginpkt(states.data());
-		SessionManager::GetInst().SendPacket(sessionId, &loginpkt);
-
-		LOG_D("Login Success [{}] userId: {}", sessionId, res.dbId);
+		SessionManager::GetInst().Schedule(sessionId, [sessionId, res]() {
+			if (res.code != ResultCode::SUCCESS)
+			{
+				LoginFailPacket failpkt(res.code);
+				SessionManager::GetInst().SendPacket(sessionId, &failpkt);
+				return;
+			}
+			SessionManager::GetInst().HandleLogin(sessionId, res);
+			auto states = GameWorldManager::GetInst().GetAllWorldStates();
+			LoginSuccessPacket loginpkt(states.data());
+			SessionManager::GetInst().SendPacket(sessionId, &loginpkt);
+			LOG_D("Login Success [{}] userId: {}", sessionId, res.dbId);
 		});
+	});
 	return;
 
 #else
@@ -256,12 +257,15 @@ void PacketManager::HandleEnterGamePacket(int32 sessionId, Packet* packet)
 	session->EnterGame(wChannelId);
 	world->PlayerEnterGame(player);
 	uint32 dbId = session->GetDBID();
-	auto [friendResultCode, friendList] = DBManager::GetInst().GetFriendList(dbId);
-	if (friendResultCode != ResultCode::SUCCESS)
-	{
-		LOG_W("Failed to load friend list for user: {}", dbId);
-	}
-	session->SetAndSendFriendsInfo(friendList);
+	DBWorker::GetInst().Push([sessionId, dbId]() {
+		auto [friendResultCode, friendList] = DBManager::GetInst().GetFriendList(dbId);
+		if (friendResultCode != ResultCode::SUCCESS)
+			LOG_W("Failed to load friend list for user: {}", dbId);
+		SessionManager::GetInst().Schedule(sessionId, [sessionId, friendList = std::move(friendList)]() {
+			auto sess = SessionManager::GetInst().GetSession(sessionId);
+			if (sess) sess->SetAndSendFriendsInfo(friendList);
+		});
+	});
 }
 
 void PacketManager::HandleMovePacket(int32 sessionId, Packet* packet)
@@ -478,26 +482,30 @@ void PacketManager::HandleFriendAddRequestPacket(int32 sessionId, Packet* packet
 
 	auto myId = session->GetDBID();
 	auto targetNick = ConvertToWString(p->TargetNickName);
-	auto targetId = DBManager::GetInst().FindUserDBId(targetNick);
-	ResultCode resCode = DBManager::GetInst().AddFriendRequest(myId, targetId);
+	auto& pInfo = session->GetPlayerInfo();
+	std::wstring myName = ConvertToWString(pInfo.GetName());
+	uint32 myLevel = pInfo.GetLevel();
 
-	FriendOperationResultPacket resPkt(EFriendOpType::Request, resCode);
-	_sessionMgr.SendPacket(sessionId, &resPkt);
-	if (resCode != ResultCode::SUCCESS) return;
+	DBWorker::GetInst().Push([sessionId, myId, targetNick, myName, myLevel]() {
+		int32 targetId = DBManager::GetInst().FindUserDBId(targetNick);
+		ResultCode resCode = DBManager::GetInst().AddFriendRequest(myId, static_cast<uint32>(targetId));
 
-	int32 targetSessId = _sessionMgr.GetOnlineSessionIdByDBId(targetId);
-	if (targetSessId != -1)
-	{
-		auto& pInfo = session->GetPlayerInfo();
-		auto name = pInfo.GetName();
-		FFriendInfo info;
-		info.DBId = myId;
-		info.SetName(ConvertToWString(name));
-		info.Level = pInfo.GetLevel();
-		info.isOnline = true;
-		FriendRequestPacket requestPkt(info);
-		_sessionMgr.SendPacket(targetSessId, &requestPkt);
-	}
+		FriendOperationResultPacket resPkt(EFriendOpType::Request, resCode);
+		SessionManager::GetInst().SendPacket(sessionId, &resPkt);
+		if (resCode != ResultCode::SUCCESS) return;
+
+		int32 targetSessId = SessionManager::GetInst().GetOnlineSessionIdByDBId(static_cast<uint32>(targetId));
+		if (targetSessId != -1)
+		{
+			FFriendInfo info;
+			info.DBId = myId;
+			info.SetName(myName);
+			info.Level = myLevel;
+			info.isOnline = true;
+			FriendRequestPacket requestPkt(info);
+			SessionManager::GetInst().SendPacket(targetSessId, &requestPkt);
+		}
+	});
 }
 
 void PacketManager::HandleFriendRemoveRequestPacket(int32 sessionId, Packet* packet)
@@ -509,25 +517,33 @@ void PacketManager::HandleFriendRemoveRequestPacket(int32 sessionId, Packet* pac
 	auto myId = session->GetDBID();
 	auto targetId = p->TargetDBID;
 
-	auto ret = DBManager::GetInst().RemoveFriend(myId, targetId);
+	DBWorker::GetInst().Push([sessionId, myId, targetId]() {
+		auto ret = DBManager::GetInst().RemoveFriend(myId, targetId);
 
-	FriendOperationResultPacket resPkt(EFriendOpType::Remove, ret);
-	_sessionMgr.SendPacket(sessionId, &resPkt);
+		FriendOperationResultPacket resPkt(EFriendOpType::Remove, ret);
+		SessionManager::GetInst().SendPacket(sessionId, &resPkt);
+		if (ret != ResultCode::SUCCESS) return;
 
-	if (ret != ResultCode::SUCCESS) return;
-	session->RemoveFriend(targetId);
+		SessionManager::GetInst().Schedule(sessionId, [sessionId, myId, targetId]() {
+			auto sess = SessionManager::GetInst().GetSession(sessionId);
+			if (!sess) return;
+			sess->RemoveFriend(targetId);
+			RemoveFriendPacket myPkt(targetId);
+			SessionManager::GetInst().SendPacket(sessionId, &myPkt);
 
-	RemoveFriendPacket myPkt(targetId);
-	_sessionMgr.SendPacket(sessionId, &myPkt);
-	int32 targetSessId = _sessionMgr.GetOnlineSessionIdByDBId(targetId);
-	if (targetSessId != -1)
-	{
-		auto targetSession = _sessionMgr.GetSession(targetSessId);
-		targetSession->RemoveFriend(myId);
-
-		RemoveFriendPacket targetPkt(myId);
-		_sessionMgr.SendPacket(targetSessId, &targetPkt);
-	}
+			int32 targetSessId = SessionManager::GetInst().GetOnlineSessionIdByDBId(targetId);
+			if (targetSessId != -1)
+			{
+				auto targetSession = SessionManager::GetInst().GetSession(targetSessId);
+				if (targetSession)
+				{
+					targetSession->RemoveFriend(myId);
+					RemoveFriendPacket targetPkt(myId);
+					SessionManager::GetInst().SendPacket(targetSessId, &targetPkt);
+				}
+			}
+		});
+	});
 }
 
 void PacketManager::HandleFriendAcceptRequestPacket(int32 sessionId, Packet* packet)
@@ -538,44 +554,48 @@ void PacketManager::HandleFriendAcceptRequestPacket(int32 sessionId, Packet* pac
 
 	auto myId = session->GetDBID();
 	auto targetId = p->TargetDBID;
+	auto& selfInfo = session->GetPlayerInfo();
+	std::wstring myName = ConvertToWString(selfInfo.GetName());
+	uint32 myLevel = selfInfo.Stats.Level;
 
-	auto ret = DBManager::GetInst().AcceptFriendRequest(myId, targetId);
-	ResultCode code = ret.first;
-	std::optional<FFriendInfo> friendInfoOpt = ret.second;
+	DBWorker::GetInst().Push([sessionId, myId, targetId, myName, myLevel]() {
+		auto ret = DBManager::GetInst().AcceptFriendRequest(myId, targetId);
+		ResultCode code = ret.first;
+		std::optional<FFriendInfo> friendInfoOpt = ret.second;
 
-	FriendOperationResultPacket resPkt(EFriendOpType::Accept, code);
-	_sessionMgr.SendPacket(sessionId, &resPkt);
+		FriendOperationResultPacket resPkt(EFriendOpType::Accept, code);
+		SessionManager::GetInst().SendPacket(sessionId, &resPkt);
+		if (code != ResultCode::SUCCESS || !friendInfoOpt.has_value())
+			return;
 
-	if (code != ResultCode::SUCCESS || !friendInfoOpt.has_value())
-		return;
+		FFriendInfo friendInfo = friendInfoOpt.value();
+		friendInfo.bAccepted = true;
 
-	FFriendInfo friendInfo = friendInfoOpt.value();
-	friendInfo.bAccepted = true;
-	session->AddFriend(friendInfo);
+		SessionManager::GetInst().Schedule(sessionId, [sessionId, myId, targetId, friendInfo, myName, myLevel]() {
+			auto sess = SessionManager::GetInst().GetSession(sessionId);
+			if (!sess) return;
+			sess->AddFriend(friendInfo);
+			AddFriendPacket myPkt(friendInfo);
+			SessionManager::GetInst().SendPacket(sessionId, &myPkt);
 
-	AddFriendPacket myPkt(friendInfo);
-	_sessionMgr.SendPacket(sessionId, &myPkt);
-
-	int32 targetSessId = _sessionMgr.GetOnlineSessionIdByDBId(targetId);
-	if (targetSessId != -1)
-	{
-		auto targetSession = _sessionMgr.GetSession(targetSessId);
-		if (targetSession)
-		{
-			auto& selfInfo = session->GetPlayerInfo();
-
-			FFriendInfo myInfo;
-			myInfo.DBId = myId;
-			myInfo.SetName(ConvertToWString(selfInfo.GetName()));
-			myInfo.Level = selfInfo.Stats.Level;
-			myInfo.bAccepted = true;
-
-			targetSession->AddFriend(myInfo);
-
-			AddFriendPacket targetPkt(myInfo);
-			_sessionMgr.SendPacket(targetSessId, &targetPkt);
-		}
-	}
+			int32 targetSessId = SessionManager::GetInst().GetOnlineSessionIdByDBId(targetId);
+			if (targetSessId != -1)
+			{
+				auto targetSession = SessionManager::GetInst().GetSession(targetSessId);
+				if (targetSession)
+				{
+					FFriendInfo myInfo;
+					myInfo.DBId = myId;
+					myInfo.SetName(myName);
+					myInfo.Level = myLevel;
+					myInfo.bAccepted = true;
+					targetSession->AddFriend(myInfo);
+					AddFriendPacket targetPkt(myInfo);
+					SessionManager::GetInst().SendPacket(targetSessId, &targetPkt);
+				}
+			}
+		});
+	});
 }
 
 void PacketManager::HandleFriendRejectRequestPacket(int32 sessionId, Packet* packet)
@@ -587,16 +607,19 @@ void PacketManager::HandleFriendRejectRequestPacket(int32 sessionId, Packet* pac
 	auto myId = session->GetDBID();
 	auto targetId = p->TargetDBID;
 
-	auto ret = DBManager::GetInst().RejectFriendRequest(myId, targetId);
-	FriendOperationResultPacket resPkt(EFriendOpType::Reject, ret);
-	_sessionMgr.SendPacket(sessionId, &resPkt);
+	DBWorker::GetInst().Push([sessionId, myId, targetId]() {
+		auto ret = DBManager::GetInst().RejectFriendRequest(myId, targetId);
 
-	int32 targetSessId = _sessionMgr.GetOnlineSessionIdByDBId(targetId);
-	if (targetSessId != -1)
-	{
 		FriendOperationResultPacket resPkt(EFriendOpType::Reject, ret);
-		_sessionMgr.SendPacket(targetSessId, &resPkt);
-	}
+		SessionManager::GetInst().SendPacket(sessionId, &resPkt);
+
+		int32 targetSessId = SessionManager::GetInst().GetOnlineSessionIdByDBId(targetId);
+		if (targetSessId != -1)
+		{
+			FriendOperationResultPacket targetResPkt(EFriendOpType::Reject, ret);
+			SessionManager::GetInst().SendPacket(targetSessId, &targetResPkt);
+		}
+	});
 }
 
 void PacketManager::HandleChangeChannelPacket(int32 sessionId, Packet* packet)

@@ -15,12 +15,14 @@ bool Server::Init()
 	}
 
 #ifdef DB_MODE
+	constexpr int32 dbThreadNum = 2;
 	auto& cfg = ConfigManager::GetInst();
-	if (!DBManager::GetInst().Connect(cfg.GetDBHost(), cfg.GetDBUser(), cfg.GetDBPassword(), cfg.GetDBSchema()))
+	if (!DBManager::GetInst().Connect(cfg.GetDBHost(), cfg.GetDBUser(), cfg.GetDBPassword(), cfg.GetDBSchema(), dbThreadNum))
 	{
 		LOG_E("DBManager");
 		return false;
 	}
+	DBWorker::GetInst().Start(dbThreadNum);
 #endif
 	WSADATA wsa_data;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa_data) != 0)
@@ -121,6 +123,10 @@ void Server::Shutdown()
 {
 	LOG_I("Shutdown Server");
 	_bRunning = false;
+
+#ifdef DB_MODE
+	DBWorker::GetInst().Shutdown();
+#endif
 
 	if (_listenSocket != INVALID_SOCKET) {
 		closesocket(_listenSocket);
