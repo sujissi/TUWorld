@@ -9,7 +9,7 @@ public:
 	Player(int32 id) :Character(id) { Init(_channelId); }
 	void Init(EWorldChannel channelId) override;
 	void LoadFromDB(const DBLoginResult& dbRes);
-	void SaveToDB(uint32 dbId);
+	void SaveStatsToDB();
 	void SetCharacterType(Type::EPlayer type);
 	void OnEnterGame();
 
@@ -92,6 +92,8 @@ public:
 	FStatData& GetStats() const { return _stats; }
 	bool IsInTutorialQuest() { return _bTutQuest; }
 	bool HasKey() const { return _inventory.HasKey(); }
+	std::vector<uint8> GetUnsavedItemTypes() const { return _inventory.GetUnsavedItemTypes(); }
+	std::shared_ptr<InventoryItem> GetInventoryItemPtr(uint32 itemId) { return _inventory.GetInventoryItemPtr(itemId); }
 private:
 	Type::EPlayer _playerType;
 	Inventory _inventory;

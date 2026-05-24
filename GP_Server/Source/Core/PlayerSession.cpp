@@ -65,8 +65,14 @@ void PlayerSession::Logout()
 		//todo: 뷰리스트 제거
 		_state = SessionState::None;
 #ifdef DB_MODE
-		_player->SaveToDB(_dbId);
+		uint32 dbId = _dbId;
+		FInfoData info = _player->GetInfo();
+		std::vector<uint8> newItems = _player->GetUnsavedItemTypes();
 		_player.reset();
+
+		DBWorker::GetInst().Push([dbId, info = std::move(info), newItems = std::move(newItems)]() {
+			DBManager::GetInst().SavePlayer(dbId, info, newItems);
+		});
 #endif
 	}
 }

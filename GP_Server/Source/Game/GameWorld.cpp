@@ -624,6 +624,19 @@ void GameWorld::PickUpWorldItem(int32 playerId, uint32 itemId)
 		SessionManager::GetInst().SendPacket(playerId, &pkt);
 		auto pkt1 = ItemPkt::PickUpPacket(itemId);
 		BroadcastToZone(zone, &pkt1);
+#ifdef DB_MODE
+		auto session = SessionManager::GetInst().GetSession(playerId);
+		if (session)
+		{
+			uint32 dbId = session->GetDBID();
+			uint8 itemTypeId = targetItem->GetItemTypeID();
+			auto invItemPtr = player->GetInventoryItemPtr(targetItem->GetItemID());
+			DBWorker::GetInst().Push([dbId, itemTypeId, invItemPtr]() {
+				if (DBManager::GetInst().AddUserItem(dbId, itemTypeId) && invItemPtr)
+					invItemPtr->saved.store(true);
+			});
+		}
+#endif
 	}
 	else
 	{
@@ -639,7 +652,24 @@ void GameWorld::UseInventoryItem(int32 playerId, uint32 itemId)
 		LOG_W("Invalid");
 		return;
 	}
+#ifdef DB_MODE
+	auto invItemPtr = player->GetInventoryItemPtr(itemId);
+	bool wasSaved = invItemPtr && invItemPtr->saved.load();
+#endif
 	player->UseItem(itemId);
+#ifdef DB_MODE
+	if (wasSaved && !player->GetInventoryItemPtr(itemId))
+	{
+		auto session = SessionManager::GetInst().GetSession(playerId);
+		if (session)
+		{
+			uint32 dbId = session->GetDBID();
+			DBWorker::GetInst().Push([dbId, itemId]() {
+				DBManager::GetInst().RemoveUserItem(dbId, itemId);
+			});
+		}
+	}
+#endif
 }
 
 void GameWorld::EquipInventoryItem(int32 playerId, uint32 itemId)
@@ -933,6 +963,7 @@ void GameWorld::RequestQuest(int32 playerId, QuestType quest)
 	}
 
 	player->SetCurrentQuest(quest);
+	player->SaveStatsToDB();
 }
 
 void GameWorld::CompleteQuest(int32 playerId, QuestType quest, bool force)
@@ -955,12 +986,16 @@ void GameWorld::CompleteQuest(int32 playerId, QuestType quest, bool force)
 	{
 		//퀘스트 진행 따라 kill이면 다 죽여야함.
 		player->GiveQuestReward(quest);
+		player->SaveStatsToDB();
 		return;
 	}
 
 
 	if (type == EQuestCategory::MOVE || type == EQuestCategory::INTERACT)
+	{
 		player->CheckAndUpdateQuestProgress(type);
+		player->SaveStatsToDB();
+	}
 }
 
 void GameWorld::RejectQuest(int32 playerId, QuestType quest)
@@ -974,6 +1009,7 @@ void GameWorld::RejectQuest(int32 playerId, QuestType quest)
 	if (quest == QuestType::TUT_START)
 	{
 		player->RejectTutorialQuest();
+		player->SaveStatsToDB();
 	}
 }
 
@@ -1042,6 +1078,19 @@ void GameWorld::BuyItem(int32 playerId, uint8 itemType, uint16 quantity)
 		SessionManager::GetInst().SendPacket(playerId, &pkt);
 		auto respkt = BuyItemResultPacket(bSuccess, ResultCode, curgold);
 		SessionManager::GetInst().SendPacket(playerId, &respkt);
+#ifdef DB_MODE
+		auto session = SessionManager::GetInst().GetSession(playerId);
+		if (session)
+		{
+			uint32 dbId = session->GetDBID();
+			uint8 itemTypeId = targetItem->GetItemTypeID();
+			auto invItemPtr = player->GetInventoryItemPtr(targetItem->GetItemID());
+			DBWorker::GetInst().Push([dbId, itemTypeId, invItemPtr]() {
+				if (DBManager::GetInst().AddUserItem(dbId, itemTypeId) && invItemPtr)
+					invItemPtr->saved.store(true);
+			});
+		}
+#endif
 	}
 	else
 	{
@@ -1059,7 +1108,24 @@ void GameWorld::SellItem(int32 playerId, uint32 itemId)
 		LOG_W("Invalid");
 		return;
 	}
-	player->SellItem(itemId);
+#ifdef DB_MODE
+	auto invItemPtr = player->GetInventoryItemPtr(itemId);
+	bool wasSaved = invItemPtr && invItemPtr->saved.load();
+#endif
+	bool sold = player->SellItem(itemId);
+#ifdef DB_MODE
+	if (sold && wasSaved)
+	{
+		auto session = SessionManager::GetInst().GetSession(playerId);
+		if (session)
+		{
+			uint32 dbId = session->GetDBID();
+			DBWorker::GetInst().Push([dbId, itemId]() {
+				DBManager::GetInst().RemoveUserItem(dbId, itemId);
+			});
+		}
+	}
+#endif
 }
 
 void GameWorld::BroadcastToZone(ZoneType zone, Packet* packet)

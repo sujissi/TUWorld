@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "Inventory.h"
-#include "ScopedDBSession.h"
 
 bool Inventory::LoadItem(const std::shared_ptr<Item>& item)
 {
@@ -49,41 +48,21 @@ std::shared_ptr<Item> Inventory::FindItem(uint32 itemId)
 	return (it != _items.end()) ? it->second->item : nullptr;
 }
 
-bool Inventory::SaveToDB(uint32 dbId)
+std::shared_ptr<InventoryItem> Inventory::GetInventoryItemPtr(uint32 itemId)
 {
-	try {
-		ScopedDBSession scoped;
-		auto& sess = scoped.Get();
-		auto schema = sess.getSchema("gp2025");
-
-		sess.startTransaction();
-
-		uint32 nextItemId = 1;
-
-		auto res = sess.sql("SELECT IFNULL(MAX(item_id), 0) + 1 FROM user_items WHERE user_id = ?")
-			.bind(dbId)
-			.execute();
-		auto row = res.fetchOne();
-		if (row) nextItemId = static_cast<uint32>(row[0].get<int>());
-
-		for (auto& [id, invItem] : _items)
-		{
-			if (invItem->saved) continue;
-
-			schema.getTable("user_items")
-				.insert("user_id", "item_id", "item_type_id")
-				.values(dbId, nextItemId++, invItem->item->GetItemTypeID())
-				.execute();
-
-			invItem->saved = true;
-		}
-
-		sess.commit();
-		return true;
-	}
-	catch (const mysqlx::Error& e)
-	{
-		LOG_E("Inventory::SaveToDB Error: {}", e.what());
-		return false;
-	}
+	auto it = _items.find(itemId);
+	return (it != _items.end()) ? it->second : nullptr;
 }
+
+
+std::vector<uint8> Inventory::GetUnsavedItemTypes() const
+{
+	std::vector<uint8> result;
+	for (const auto& [id, invItem] : _items)
+	{
+		if (!invItem->saved.load())
+			result.push_back(invItem->item->GetItemTypeID());
+	}
+	return result;
+}
+

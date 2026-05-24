@@ -2,6 +2,7 @@
 #include "DBManager.h"
 #include "GameWorld.h"
 #include "ScopedDBSession.h"
+#include "ScopedTransaction.h"
 #include "SessionManager.h"
 
 bool DBManager::Connect(const std::string& host, const std::string& user, const std::string& pwd, const std::string& db, int32 poolSize)
@@ -53,6 +54,9 @@ DBLoginResult DBManager::SignUpUser(int32 sessionId, const std::string& login_id
 		ScopedDBSession scoped;
 		auto& sess = scoped.Get();
 		auto schema = sess.getSchema("gp2025");
+
+		ScopedTransaction tx(sess);
+
 		auto result = schema.getTable("users")
 			.insert("login_id", "password", "nickname")
 			.values(login_id, password, nickname)
@@ -86,7 +90,7 @@ DBLoginResult DBManager::SignUpUser(int32 sessionId, const std::string& login_id
 			)
 			.execute();
 
-
+		tx.Commit();
 		return { ResultCode::SUCCESS, dbId, newinfo };
 	}
 	catch (const mysqlx::Error& e)
@@ -188,15 +192,67 @@ DBLoginResult DBManager::CheckLogin(int32 sessionId, const std::string& login_id
 	}
 }
 
-bool DBManager::UpdatePlayerInfo(uint32 dbId, const FInfoData& info)
+
+bool DBManager::UpdatePlayerStats(uint32 dbId, const FInfoData& info)
 {
 	try {
 		ScopedDBSession scoped;
 		auto& sess = scoped.Get();
 		auto schema = sess.getSchema("gp2025");
 
-		auto table = schema.getTable("player_info");
-		table.update()
+		schema.getTable("player_info")
+			.update()
+			.set("character_type", info.CharacterType)
+			.set("pos_x", info.Pos.X)
+			.set("pos_y", info.Pos.Y)
+			.set("pos_z", info.Pos.Z)
+			.set("yaw", info.Yaw)
+			.set("level", info.Stats.Level)
+			.set("exp", info.Stats.Exp)
+			.set("max_exp", info.Stats.MaxExp)
+			.set("hp", info.Stats.Hp)
+			.set("max_hp", info.Stats.MaxHp)
+			.set("damage", info.Stats.Damage)
+			.set("crt_rate", info.Stats.CrtRate)
+			.set("crt_value", info.Stats.CrtValue)
+			.set("dodge", info.Stats.Dodge)
+			.set("speed", info.Stats.Speed)
+			.set("gold", info.Gold)
+			.set("skill1_gid", static_cast<int>(info.Skills.Q.SkillGID))
+			.set("skill1_level", info.Skills.Q.SkillLevel)
+			.set("skill2_gid", static_cast<int>(info.Skills.E.SkillGID))
+			.set("skill2_level", info.Skills.E.SkillLevel)
+			.set("skill3_gid", static_cast<int>(info.Skills.R.SkillGID))
+			.set("skill3_level", info.Skills.R.SkillLevel)
+			.set("current_quest_type", static_cast<int>(info.CurrentQuest.QuestType))
+			.set("current_quest_status", static_cast<int>(info.CurrentQuest.Status))
+			.set("equip_weapon", static_cast<int>(info.EquipState.Sword))
+			.set("equip_helmet", static_cast<int>(info.EquipState.Helmet))
+			.set("equip_chest", static_cast<int>(info.EquipState.Chest))
+			.where("id = :id")
+			.bind("id", dbId)
+			.execute();
+
+		return true;
+	}
+	catch (const mysqlx::Error& e)
+	{
+		LOG_E("MySQL Error (UpdatePlayerStats): {}", e.what());
+		return false;
+	}
+}
+
+bool DBManager::SavePlayer(uint32 dbId, const FInfoData& info, const std::vector<uint8>& newItemTypes)
+{
+	try {
+		ScopedDBSession scoped;
+		auto& sess = scoped.Get();
+		auto schema = sess.getSchema("gp2025");
+
+		ScopedTransaction tx(sess);
+
+		schema.getTable("player_info")
+			.update()
 			.set("character_type", info.CharacterType)
 			.set("pos_x", info.Pos.X)
 			.set("pos_y", info.Pos.Y)
@@ -231,12 +287,30 @@ bool DBManager::UpdatePlayerInfo(uint32 dbId, const FInfoData& info)
 			.bind("id", dbId)
 			.execute();
 
-		LOG_D("Update DB - dbid: {}", dbId);
+		if (!newItemTypes.empty())
+		{
+			auto res = sess.sql("SELECT IFNULL(MAX(item_id), 0) + 1 FROM user_items WHERE user_id = ?")
+				.bind(dbId)
+				.execute();
+			auto row = res.fetchOne();
+			uint32 nextItemId = row ? static_cast<uint32>(row[0].get<int>()) : 1;
+
+			for (uint8 itemTypeId : newItemTypes)
+			{
+				schema.getTable("user_items")
+					.insert("user_id", "item_id", "item_type_id")
+					.values(dbId, nextItemId++, itemTypeId)
+					.execute();
+			}
+		}
+
+		tx.Commit();
+		LOG_D("SavePlayer OK - dbid: {}", dbId);
 		return true;
 	}
 	catch (const mysqlx::Error& e)
 	{
-		LOG_E("MySQL Error (UpdatePlayerInfo): {}", e.what());
+		LOG_E("MySQL Error (SavePlayer): {}", e.what());
 		return false;
 	}
 }
@@ -329,7 +403,8 @@ ResultCode DBManager::AddFriendRequest(uint32 myId, uint32 targetId)
 		auto& sess = scoped.Get();
 		auto schema = sess.getSchema("gp2025");
 
-		sess.startTransaction();
+		ScopedTransaction tx(sess);
+
 		schema.getTable("user_friends")
 			.insert("user_id", "friend_id", "status", "requester_id")
 			.values(myId, targetId, 0, myId)
@@ -340,7 +415,7 @@ ResultCode DBManager::AddFriendRequest(uint32 myId, uint32 targetId)
 			.values(targetId, myId, 0, myId)
 			.execute();
 
-		sess.commit();
+		tx.Commit();
 
 		LOG_D("Friend request sent (bidirectional): {} <-> {}", myId, targetId);
 		return ResultCode::SUCCESS;
@@ -382,7 +457,7 @@ std::pair<ResultCode, std::optional<FFriendInfo>> DBManager::AcceptFriendRequest
 		auto& sess = scoped.Get();
 		auto schema = sess.getSchema("gp2025");
 
-		sess.startTransaction();
+		ScopedTransaction tx(sess);
 
 		auto updateRes1 = schema.getTable("user_friends")
 			.update()
@@ -393,10 +468,7 @@ std::pair<ResultCode, std::optional<FFriendInfo>> DBManager::AcceptFriendRequest
 			.execute();
 
 		if (updateRes1.getAffectedItemsCount() == 0)
-		{
-			sess.rollback();
 			return { ResultCode::FRIEND_USER_NOT_FOUND, std::nullopt };
-		}
 
 		auto updateRes2 = schema.getTable("user_friends")
 			.update()
@@ -421,12 +493,10 @@ std::pair<ResultCode, std::optional<FFriendInfo>> DBManager::AcceptFriendRequest
 		).bind(requesterId).execute();
 
 		auto row = result.fetchOne();
-		if (!row) {
-			sess.rollback();
+		if (!row)
 			return { ResultCode::FRIEND_USER_NOT_FOUND, std::nullopt };
-		}
 
-		sess.commit();
+		tx.Commit();
 
 		FFriendInfo info;
 		info.DBId = static_cast<uint32>(row[0].get<int>());
@@ -452,7 +522,7 @@ ResultCode DBManager::RejectFriendRequest(uint32 myId, uint32 requesterId)
 		auto& sess = scoped.Get();
 		auto schema = sess.getSchema("gp2025");
 
-		sess.startTransaction();
+		ScopedTransaction tx(sess);
 
 		auto result = schema.getTable("user_friends")
 			.remove()
@@ -461,12 +531,10 @@ ResultCode DBManager::RejectFriendRequest(uint32 myId, uint32 requesterId)
 			.bind("to", myId)
 			.execute();
 
-		if (result.getAffectedItemsCount() == 0) {
-			sess.rollback();
+		if (result.getAffectedItemsCount() == 0)
 			return ResultCode::FRIEND_USER_NOT_FOUND;
-		}
 
-		sess.commit();
+		tx.Commit();
 
 		LOG_D("Friend request rejected and removed (both directions): {} <-> {}", myId, requesterId);
 		return ResultCode::SUCCESS;
@@ -485,7 +553,7 @@ ResultCode DBManager::RemoveFriend(uint32 userId, uint32 friendId)
 		auto& sess = scoped.Get();
 		auto schema = sess.getSchema("gp2025");
 
-		sess.startTransaction();
+		ScopedTransaction tx(sess);
 
 		auto result = schema.getTable("user_friends")
 			.remove()
@@ -494,12 +562,10 @@ ResultCode DBManager::RemoveFriend(uint32 userId, uint32 friendId)
 			.bind("u2", friendId)
 			.execute();
 
-		if (result.getAffectedItemsCount() == 0) {
-			sess.rollback();
+		if (result.getAffectedItemsCount() == 0)
 			return ResultCode::FRIEND_USER_NOT_FOUND;
-		}
 
-		sess.commit();
+		tx.Commit();
 
 		LOG_D("Friendship removed (both directions): {} <-> {}", userId, friendId);
 		return ResultCode::SUCCESS;

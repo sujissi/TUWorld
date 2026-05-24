@@ -30,11 +30,17 @@ void Player::LoadFromDB(const DBLoginResult& dbRes)
 	}
 }
 
-void Player::SaveToDB(uint32 dbId)
+void Player::SaveStatsToDB()
 {
-
-	DBManager::GetInst().UpdatePlayerInfo(dbId, _info);
-	_inventory.SaveToDB(dbId);
+#ifdef DB_MODE
+	auto session = SessionManager::GetInst().GetSession(_id);
+	if (!session) return;
+	uint32 dbId = session->GetDBID();
+	FInfoData snapshot = _info;
+	DBWorker::GetInst().Push([dbId, snapshot = std::move(snapshot)]() {
+		DBManager::GetInst().UpdatePlayerStats(dbId, snapshot);
+	});
+#endif
 }
 
 void Player::SetCharacterType(Type::EPlayer type)
@@ -777,6 +783,7 @@ void Player::LevelUp()
 	SessionManager::GetInst().SendPacket(_id, &pkt);
 
 	UnlockSkillsOnLevelUp();
+	SaveStatsToDB();
 }
 
 void Player::ApplyLevelStats(uint32 level)
