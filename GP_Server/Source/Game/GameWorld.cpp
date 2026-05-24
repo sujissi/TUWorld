@@ -690,6 +690,7 @@ void GameWorld::EquipInventoryItem(int32 playerId, uint32 itemId)
 	auto pkt = ItemPkt::EquipItemPacket(playerId, itemTypeID, player->GetInfo());
 	SessionManager::GetInst().SendPacket(playerId, &pkt);
 	SessionManager::GetInst().BroadcastToViewList(&pkt, viewList);
+	player->SaveStatsToDB();
 }
 
 void GameWorld::UnequipInventoryItem(int32 playerId, uint32 itemId)
@@ -709,6 +710,7 @@ void GameWorld::UnequipInventoryItem(int32 playerId, uint32 itemId)
 	auto pkt = ItemPkt::UnequipItemPacket(playerId, itemTypeID, player->GetInfo());
 	SessionManager::GetInst().SendPacket(playerId, &pkt);
 	SessionManager::GetInst().BroadcastToViewList(&pkt, viewList);
+	player->SaveStatsToDB();
 }
 
 bool GameWorld::TransferToZone(int32 playerId, ZoneType newZone)
@@ -992,10 +994,7 @@ void GameWorld::CompleteQuest(int32 playerId, QuestType quest, bool force)
 
 
 	if (type == EQuestCategory::MOVE || type == EQuestCategory::INTERACT)
-	{
 		player->CheckAndUpdateQuestProgress(type);
-		player->SaveStatsToDB();
-	}
 }
 
 void GameWorld::RejectQuest(int32 playerId, QuestType quest)

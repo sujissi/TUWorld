@@ -604,7 +604,10 @@ void Player::CheckAndUpdateQuestProgress(EQuestCategory type)
 	}
 
 	if (res)
+	{
 		GiveQuestReward(quest);
+		SaveStatsToDB();
+	}
 }
 
 
